@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Users, FileCheck, IndianRupee, AlertTriangle, RefreshCcw, UserPlus, Search,
-  ChevronRight, X, MessageCircle, CheckCircle2, Clock, XCircle
+  ChevronRight, X, MessageCircle, CheckCircle2, Clock, XCircle, Download
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -81,6 +81,33 @@ export default function CADashboard() {
     } catch (err) { toast.error("Remove fail"); }
   };
 
+  const exportCsv = async () => {
+    try {
+      const res = await api.get(`/ca/export`, { params: { month, format: "csv" }, responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `hisaabbot-ca-export-${month}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("CSV download shuru ho gaya");
+    } catch (err) { toast.error("Export fail"); }
+  };
+
+  const exportJson = async () => {
+    try {
+      const res = await api.get(`/ca/export`, { params: { month, format: "json" } });
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `hisaabbot-ca-export-${month}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("JSON download shuru ho gaya");
+    } catch (err) { toast.error("Export fail"); }
+  };
+
   const stats = data?.stats;
 
   return (
@@ -96,6 +123,8 @@ export default function CADashboard() {
             {generateMonths().map((m) => <option key={m} value={m}>{m}</option>)}
           </Select>
           <Button variant="outline" onClick={load} data-testid="ca-refresh"><RefreshCcw className="w-4 h-4 mr-1.5"/>Refresh</Button>
+          <Button variant="outline" onClick={exportCsv} data-testid="ca-export-csv"><Download className="w-4 h-4 mr-1.5"/>Export CSV</Button>
+          <Button variant="outline" onClick={exportJson} data-testid="ca-export-json"><Download className="w-4 h-4 mr-1.5"/>JSON</Button>
           <Button onClick={() => setShowInvite(true)} data-testid="ca-invite-btn"><UserPlus className="w-4 h-4 mr-1.5"/>Invite client</Button>
         </div>
       </div>
