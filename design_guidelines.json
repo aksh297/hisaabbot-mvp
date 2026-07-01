@@ -1,0 +1,118 @@
+{
+  "project_name": "HisaabBot",
+  "theme": "light",
+  "archetype": "1 (Organic & Earthy)",
+  "concept": "The Bharat Neo-Ledger. A warm, trustworthy, paper-and-ink inspired UI optimized for mobile web. It bridges the gap between traditional Indian bookkeeping (Bahi-Khata) and modern SaaS, without feeling like a cold, generic western fintech app. It leans into trust, utilizing grounded earth tones, crisp typography, and high-contrast tactile elements.",
+  "colors": {
+    "background": {
+      "default": "#FDFBF7",
+      "paper": "#F4F1DE",
+      "chat_bg": "#EFEAE2"
+    },
+    "primary": {
+      "default": "#1E3F33",
+      "hover": "#2A5244",
+      "whatsapp_brand": "#128C7E",
+      "whatsapp_dark": "#075E54"
+    },
+    "secondary": {
+      "default": "#D49A00",
+      "hover": "#B38200",
+      "ochre_light": "#F2CC8F"
+    },
+    "text": {
+      "primary": "#1C1B1F",
+      "secondary": "#57534E",
+      "tertiary": "#78716C",
+      "inverse": "#FFFFFF"
+    },
+    "status": {
+      "success": "#2E7D32",
+      "error": "#C05640",
+      "warning": "#EAB308",
+      "info": "#0284C7"
+    },
+    "border": {
+      "default": "#E7E5E4",
+      "focus": "#1E3F33"
+    }
+  },
+  "typography": {
+    "font_families": {
+      "headings": "'Cabinet Grotesk', 'Outfit', sans-serif",
+      "body": "'IBM Plex Sans', 'Noto Sans Devanagari', sans-serif",
+      "mono": "'IBM Plex Mono', monospace"
+    },
+    "rules": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-none text-[#1E3F33]",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-[#1C1B1F]",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-tight text-[#1C1B1F]",
+      "body": "text-base leading-relaxed text-[#57534E]",
+      "small": "text-sm text-[#78716C]",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-[#D49A00]"
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Generous Spacing (Tailwind Scale). Use p-6 or p-8 inside cards. Mobile-first grid layouts.",
+    "container_max_width": "max-w-7xl",
+    "dashboard_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "bento_grid_marketing": "grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-8",
+    "alignment": "Left-align dense text and data. Center hero text only if balanced."
+  },
+  "surfaces_and_components": {
+    "cards": {
+      "style": "Neumorphism (Tactile Variant)",
+      "classes": "bg-[#FDFBF7] rounded-xl border border-[#E7E5E4] shadow-sm hover:shadow-md transition-shadow duration-200"
+    },
+    "buttons": {
+      "primary": "bg-[#1E3F33] text-white hover:bg-[#2A5244] font-semibold rounded-lg px-6 py-3 transition-colors",
+      "secondary": "bg-[#F2CC8F] text-[#1E3F33] hover:bg-[#E3BA79] font-semibold rounded-lg px-6 py-3 transition-colors",
+      "outline": "bg-transparent border border-[#1E3F33] text-[#1E3F33] hover:bg-[#FDFBF7] font-semibold rounded-lg px-6 py-3 transition-colors"
+    },
+    "whatsapp_simulator": {
+      "header": "bg-[#075E54] text-white p-4 flex items-center shadow-md",
+      "chat_background": "bg-[#EFEAE2] p-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-blend-multiply opacity-90",
+      "bubble_received": "bg-white text-[#1C1B1F] rounded-tr-xl rounded-b-xl p-3 shadow-sm max-w-[80%]",
+      "bubble_sent": "bg-[#DCF8C6] text-[#1C1B1F] rounded-tl-xl rounded-b-xl p-3 shadow-sm max-w-[80%] self-end",
+      "input_area": "bg-[#F0F0F0] p-3 flex items-center gap-2"
+    },
+    "tables": "Shadcn UI tables, customized with text-[#57534E] and border-[#E7E5E4]. Flat styling without heavy borders. Use p-4 for cells.",
+    "glassmorphism": "Used only for sticky headers. backdrop-blur-xl bg-[#FDFBF7]/80 border-b border-[#E7E5E4]/50"
+  },
+  "motion_and_interactions": {
+    "hover_states": "Cards lift slightly (-translate-y-1). Buttons darken in hue.",
+    "transitions": "transition-all duration-300 ease-out",
+    "entrance": "Staggered fade-up for dashboard widgets and chat bubbles."
+  },
+  "icons_and_assets": {
+    "library": "lucide-react",
+    "style": "Stroke width 2px, rounded, colored in #1E3F33 or #78716C."
+  },
+  "media": {
+    "hero_image": {
+      "url": "https://images.pexels.com/photos/35317008/pexels-photo-35317008.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "A street vendor in Varanasi, representing the target MSME persona. Use with a dark green or terracotta gradient overlay (bg-black/30) to ensure text contrast."
+    },
+    "receipt_texture": {
+      "url": "https://images.unsplash.com/photo-1673874855449-e8620ddfa867?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwyfHxwYXBlciUyMHJlY2VpcHQlMjBpbnZvaWNlfGVufDB8fHx8MTc4Mjk0MjYzNHww&ixlib=rb-4.1.0&q=85",
+      "description": "Paper receipt texture, can be used as a subtle background element in the invoice upload section or pricing cards."
+    },
+    "market_ambience": {
+      "url": "https://images.unsplash.com/photo-1728325444513-f6f7bdd0950a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBtYXJrZXQlMjBzaG9wfGVufDB8fHx8MTc4Mjk0MjYzNHww&ixlib=rb-4.1.0&q=85",
+      "description": "Indian market shop street view, ideal for the CA/bulk dashboard background or onboarding screens."
+    }
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure minimum 4.5:1 contrast for all text against backgrounds. The #1E3F33 primary color on #FDFBF7 background provides excellent contrast.",
+    "testing_attributes": "All interactive elements must include a data-testid attribute in kebab-case."
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette. DO NOT use generic blue/purple SaaS colors. Stick to the Earthy 'Neo-Ledger' palette.",
+    "Implement the WhatsApp Chat Simulator using the specific classes provided in surfaces_and_components.whatsapp_simulator.",
+    "Ensure Devanagari script renders properly by prioritizing 'IBM Plex Sans' in the global font family.",
+    "Do not use transparent headers without a backdrop blur and background tint.",
+    "Use pure HTML + Tailwind for the marketing landing page structure, utilizing the 'bento_grid_marketing' layout.",
+    "Use Shadcn UI components heavily for the dashboard and CA panel, but customize their borders, radii, and shadows to match the 'surfaces_and_components.cards' style.",
+    "Ensure all data-testids are implemented for every form input, button, and navigation link."
+  ]
+}
