@@ -179,7 +179,11 @@ async def get_current_user(request: Request) -> dict:
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Invalid token type")
         uid = payload["sub"]
-        user = await db.users.find_one({"_id": ObjectId(uid)})
+        try:
+            oid = ObjectId(uid)
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid token subject")
+        user = await db.users.find_one({"_id": oid})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         return user
