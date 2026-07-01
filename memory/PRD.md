@@ -97,3 +97,40 @@ The user provided detailed HisaabBot PRD, README, execution checklist, and landi
 ### Removed / cleaned up
 - Duplicate `_ensure_ca()` call in `ca_mark_filed`.
 - Unused `prev_month` variable in startup seed.
+
+---
+## Session 3 (2026-07-01) — Refactor + wire-ready integrations + CA export
+
+### Delivered
+- **Full backend refactor** — from a single 1,280-line `server.py` → thin `server.py` (~55 lines) + 10 focused `core/` modules + 8 feature `routers/`.
+- **Gupshup WhatsApp — wire-ready**: `core/whatsapp_client.py` (send text, send template, parse inbound), `routers/whatsapp.py` (webhook that auto-routes text messages through GPT-4o, /status, /send-test, /send-template). Graceful simulation when creds missing.
+- **Masters India GSP — wire-ready**: `core/gsp_client.py` with token caching + upload_return + submit_with_evc (Aadhaar-EVC OTP). New endpoints: `POST /api/gst/file`, `POST /api/gst/file/submit-otp`, `GET /api/gst/filings`. Simulates `SIM-ACK-*` and `SIM-ARN-*` when creds missing.
+- **Vendor UI**: GSTR-3B card now has "File GSTR-1 via GSP" + "File GSTR-3B via GSP" buttons → OTP modal → ARN. Filing history section under the note card. Settings shows Gupshup + Masters India status cards with SIMULATED badges + activation instructions.
+- **CA export**: `GET /api/ca/export?format=csv|json` — CSV has stylised header, summary + full column grid. CA dashboard has Export CSV + JSON buttons.
+
+### Test status
+- Backend: **50/50 pytest** (16 iter-1 regression + 13 iter-2 regression + 21 iter-3 new). Zero regressions from refactor.
+- Frontend: All critical iter-3 flows verified (File-via-GSP + OTP + ARN, CA CSV download, Settings status cards, all tabs render).
+
+### Activation cheat-sheet
+Once the founder gets real creds, add to `/app/backend/.env` and `sudo supervisorctl restart backend`:
+
+```
+# Gupshup (WhatsApp)
+GUPSHUP_API_KEY=xxx
+GUPSHUP_APP_NAME=hisaabbot
+GUPSHUP_SOURCE=+91XXXXXXXXXX
+
+# Masters India (GSP filing)
+MASTERS_INDIA_CLIENT_ID=xxx
+MASTERS_INDIA_CLIENT_SECRET=xxx
+MASTERS_INDIA_BASE_URL=https://api.mastersindia.co
+MASTERS_INDIA_SANDBOX=true
+```
+Both integrations flip from simulated → live automatically. No code change needed.
+
+### Backlog updates
+- P0 → **DONE (wire-ready)**: Gupshup + Masters India integration code paths.
+- P0 remaining: Razorpay UPI autopay for subscriptions.
+- P1 remaining: Multi-language UI, refresh-token rotation, e-invoicing (IRN).
+- P2 remaining: PDF invoice exports, WA template automation (welcome / deadline / receipt), analytics charts.
