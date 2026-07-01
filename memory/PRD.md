@@ -76,3 +76,24 @@ The user provided detailed HisaabBot PRD, README, execution checklist, and landi
 1. Present the MVP to user; gather feedback on chat playground UX and dashboard hierarchy.
 2. If user green-lights Gupshup live integration → activate BSP account, approve templates.
 3. Explore GSP shortlist (Masters India vs ClearTax vs KDK) for production filing.
+
+---
+## Session 2 (2026-07-01) — CA Plan complete + Rollout docs
+
+### Delivered
+- **CA Plan bulk client dashboard** (`/app/clients`) — Priya Verma view with 4 seeded clients, stat cards, search/filter, per-client drawer with filing actions & WhatsApp reminder, invite modal.
+- **Backend CA endpoints**: `GET /api/ca/clients`, `POST /api/ca/clients/invite`, `DELETE /api/ca/clients/{id}`, `GET /api/ca/clients/{id}/summary`, `POST /api/ca/filings/mark`.
+- **Role-based navigation** — CA users see only Clients / Chat / Settings; vendor role isolation via `_ensure_ca()` on every CA route.
+- **Signup role toggle** — Vendor vs CA card selector.
+- **Live GPT-4o + Whisper verified** — real invoice photo OCR extracted 98% accuracy on synthetic Kailash Textiles invoice; Hinglish chat responded correctly on WhatsApp playground.
+- **Rollout playbooks written**:
+  - `/app/docs/gupshup_rollout.md` — full Gupshup BSP onboarding + 5 draft WhatsApp templates + outbound send helper code.
+  - `/app/docs/gsp_provider_shortlist.md` — Masters India vs ClearTax analysis with recommendation (Masters India for phase-1).
+
+### Test status
+- Backend: 29/29 pytest cases pass (16 regression + 13 CA-specific).
+- Frontend: All CA critical flows verified via Playwright.
+
+### Removed / cleaned up
+- Duplicate `_ensure_ca()` call in `ca_mark_filed`.
+- Unused `prev_month` variable in startup seed.

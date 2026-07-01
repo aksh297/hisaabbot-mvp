@@ -1005,7 +1005,6 @@ class MarkFiledReq(BaseModel):
 @api.post("/ca/filings/mark")
 async def ca_mark_filed(req: MarkFiledReq, current=Depends(get_current_user)):
     _ensure_ca(current)
-    _ensure_ca(current)
     ca_id = str(current["_id"])
     # Verify link
     link = await db.client_links.find_one({"ca_id": ca_id, "vendor_id": req.vendor_id})
