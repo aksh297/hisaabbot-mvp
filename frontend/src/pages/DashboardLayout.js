@@ -2,13 +2,13 @@ import React, { useState } from "react";
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
 import {
   LayoutDashboard, MessageCircle, FileText, ShieldCheck, IndianRupee, Mic,
-  Settings, LogOut, Menu, X
+  Settings, LogOut, Menu, X, Users
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Button, Badge } from "../components/ui/primitives";
 import { cn } from "../lib/utils";
 
-const nav = [
+const NAV_VENDOR = [
   { to: "/app", end: true, icon: LayoutDashboard, label: "Dashboard", testid: "nav-dashboard" },
   { to: "/app/chat", icon: MessageCircle, label: "Chat playground", testid: "nav-chat" },
   { to: "/app/invoices", icon: FileText, label: "Invoices", testid: "nav-invoices" },
@@ -18,10 +18,17 @@ const nav = [
   { to: "/app/settings", icon: Settings, label: "Settings", testid: "nav-settings" },
 ];
 
+const NAV_CA = [
+  { to: "/app/clients", end: true, icon: Users, label: "Clients", testid: "nav-clients" },
+  { to: "/app/chat", icon: MessageCircle, label: "Chat playground", testid: "nav-chat" },
+  { to: "/app/settings", icon: Settings, label: "Settings", testid: "nav-settings" },
+];
+
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const nvg = useNavigate();
   const [open, setOpen] = useState(false);
+  const nav = user?.role === "ca" ? NAV_CA : NAV_VENDOR;
 
   const doLogout = async () => {
     await logout();

@@ -76,6 +76,7 @@ class RegisterReq(BaseModel):
     phone: Optional[str] = None
     city: Optional[str] = None
     language: str = "hi"
+    role: Optional[str] = "vendor"  # "vendor" | "ca"
 
 
 class LoginReq(BaseModel):
@@ -495,7 +496,7 @@ async def register(req: RegisterReq, response: Response):
         "gstin": req.gstin.upper() if req.gstin else None,
         "city": req.city,
         "language": req.language,
-        "role": "vendor",
+        "role": req.role if req.role in ("vendor", "ca") else "vendor",
         "created_at": datetime.now(timezone.utc),
     }
     res = await db.users.insert_one(doc)
@@ -838,6 +839,216 @@ async def whatsapp_webhook_verify(request: Request):
     return {"status": "verified"}
 
 
+# ---------------- CA Plan: Bulk client dashboard ----------------
+class InviteClientReq(BaseModel):
+    name: str
+    business_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    gstin: Optional[str] = None
+    city: Optional[str] = None
+
+
+def _ensure_ca(user: dict):
+    if user.get("role") != "ca":
+        raise HTTPException(status_code=403, detail="Only CA accounts can access this")
+
+
+async def _client_status_row(ca_id: str, vendor: dict, month: str) -> dict:
+    """Compute a status summary for one client vendor for the given month."""
+    vid = str(vendor["_id"])
+    # aggregate invoices for month
+    cur = db.invoices.find({"user_id": vid, "invoice_date": {"$regex": f"^{re.escape(month)}"}})
+    invoices = []
+    async for d in cur:
+        d["_id"] = str(d["_id"])
+        invoices.append(d)
+    summary = compute_gst_summary(invoices, month)
+
+    filing = await db.filings.find_one({"ca_id": ca_id, "vendor_id": vid, "period": month})
+    gstr1_status = (filing or {}).get("gstr1_status", "pending")
+    gstr3b_status = (filing or {}).get("gstr3b_status", "pending")
+
+    total_sales = sum(1 for i in invoices if i.get("type") == "sales")
+    total_purchase = sum(1 for i in invoices if i.get("type") == "purchase")
+
+    return {
+        "vendor_id": vid,
+        "name": vendor.get("name"),
+        "business_name": vendor.get("business_name"),
+        "gstin": vendor.get("gstin"),
+        "city": vendor.get("city"),
+        "phone": vendor.get("phone"),
+        "email": vendor.get("email"),
+        "status": vendor.get("client_status", "active"),  # active / invited
+        "sales_total": summary["gstr1"]["total_amount"],
+        "purchase_total": summary["gstr3b"]["inward_taxable"] + summary["gstr3b"]["itc_total"],
+        "output_tax": summary["gstr3b"]["output_tax_total"],
+        "itc_total": summary["gstr3b"]["itc_total"],
+        "net_payable": summary["gstr3b"]["net_payable"],
+        "sales_count": total_sales,
+        "purchase_count": total_purchase,
+        "gstr1_status": gstr1_status,
+        "gstr3b_status": gstr3b_status,
+        "period": month,
+    }
+
+
+@api.get("/ca/clients")
+async def ca_list_clients(month: Optional[str] = None, current=Depends(get_current_user)):
+    _ensure_ca(current)
+    if not month:
+        now = datetime.now(timezone.utc)
+        month = f"{now.year}-{now.month:02d}"
+    ca_id = str(current["_id"])
+    links = db.client_links.find({"ca_id": ca_id})
+    rows: List[dict] = []
+    vendor_ids: List[str] = []
+    async for link in links:
+        vendor_ids.append(link["vendor_id"])
+    # fetch vendors
+    if not vendor_ids:
+        return {"period": month, "clients": [], "stats": _ca_stats([])}
+    cursor = db.users.find({"_id": {"$in": [ObjectId(v) for v in vendor_ids]}})
+    vendors = []
+    async for v in cursor:
+        vendors.append(v)
+    for v in vendors:
+        rows.append(await _client_status_row(ca_id, v, month))
+    rows.sort(key=lambda r: (0 if r["gstr1_status"] == "pending" else 1, -(r["net_payable"] or 0)))
+    return {"period": month, "clients": rows, "stats": _ca_stats(rows)}
+
+
+def _ca_stats(rows: List[dict]) -> dict:
+    total = len(rows)
+    filed_1 = sum(1 for r in rows if r["gstr1_status"] == "filed")
+    filed_3b = sum(1 for r in rows if r["gstr3b_status"] == "filed")
+    pending = total - min(filed_1, filed_3b)
+    total_output = round(sum(r.get("output_tax", 0) or 0 for r in rows), 2)
+    total_itc = round(sum(r.get("itc_total", 0) or 0 for r in rows), 2)
+    total_net = round(sum(r.get("net_payable", 0) or 0 for r in rows), 2)
+    total_sales = round(sum(r.get("sales_total", 0) or 0 for r in rows), 2)
+    return {
+        "total_clients": total,
+        "gstr1_filed": filed_1,
+        "gstr3b_filed": filed_3b,
+        "pending": pending,
+        "combined_output_tax": total_output,
+        "combined_itc": total_itc,
+        "combined_net_payable": total_net,
+        "combined_sales": total_sales,
+    }
+
+
+@api.post("/ca/clients/invite")
+async def ca_invite_client(req: InviteClientReq, current=Depends(get_current_user)):
+    _ensure_ca(current)
+    if not req.email and not req.phone:
+        raise HTTPException(status_code=400, detail="email or phone required")
+    if req.gstin:
+        v = validate_gstin(req.gstin)
+        if not v["valid"]:
+            raise HTTPException(status_code=400, detail=v.get("error", "Invalid GSTIN"))
+    # Look up or create the vendor user
+    q: dict = {}
+    if req.email:
+        q["email"] = req.email.strip().lower()
+    vendor = await db.users.find_one(q) if q else None
+    if not vendor:
+        vendor_doc = {
+            "email": (req.email or f"invited-{uuid.uuid4().hex[:8]}@hisaabbot.in").lower(),
+            "password_hash": hash_password(uuid.uuid4().hex),  # random — invited users must reset later
+            "name": req.name,
+            "role": "vendor",
+            "business_name": req.business_name,
+            "gstin": req.gstin.upper() if req.gstin else None,
+            "city": req.city,
+            "phone": req.phone,
+            "language": "hi",
+            "client_status": "invited",
+            "created_at": datetime.now(timezone.utc),
+        }
+        res = await db.users.insert_one(vendor_doc)
+        vendor = {**vendor_doc, "_id": res.inserted_id}
+    # Link
+    ca_id = str(current["_id"])
+    vid = str(vendor["_id"])
+    existing = await db.client_links.find_one({"ca_id": ca_id, "vendor_id": vid})
+    if existing:
+        raise HTTPException(status_code=400, detail="Already your client")
+    await db.client_links.insert_one({
+        "ca_id": ca_id,
+        "vendor_id": vid,
+        "created_at": datetime.now(timezone.utc),
+    })
+    return {"ok": True, "vendor_id": vid, "email": vendor.get("email")}
+
+
+@api.delete("/ca/clients/{vendor_id}")
+async def ca_remove_client(vendor_id: str, current=Depends(get_current_user)):
+    _ensure_ca(current)
+    ca_id = str(current["_id"])
+    res = await db.client_links.delete_one({"ca_id": ca_id, "vendor_id": vendor_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Client link not found")
+    return {"ok": True}
+
+
+class MarkFiledReq(BaseModel):
+    vendor_id: str
+    period: str
+    return_type: str  # "gstr1" | "gstr3b"
+    status: str = "filed"  # or "pending"
+    ack_number: Optional[str] = None
+
+
+@api.post("/ca/filings/mark")
+async def ca_mark_filed(req: MarkFiledReq, current=Depends(get_current_user)):
+    _ensure_ca(current)
+    _ensure_ca(current)
+    ca_id = str(current["_id"])
+    # Verify link
+    link = await db.client_links.find_one({"ca_id": ca_id, "vendor_id": req.vendor_id})
+    if not link:
+        raise HTTPException(status_code=403, detail="Not your client")
+    if req.return_type not in ("gstr1", "gstr3b"):
+        raise HTTPException(status_code=400, detail="return_type must be gstr1 or gstr3b")
+    field = f"{req.return_type}_status"
+    doc = {
+        "ca_id": ca_id,
+        "vendor_id": req.vendor_id,
+        "period": req.period,
+    }
+    update = {"$set": {field: req.status, f"{req.return_type}_ack": req.ack_number,
+                        f"{req.return_type}_at": datetime.now(timezone.utc)}}
+    await db.filings.update_one(doc, update, upsert=True)
+    return {"ok": True}
+
+
+@api.get("/ca/clients/{vendor_id}/summary")
+async def ca_client_summary(vendor_id: str, month: Optional[str] = None, current=Depends(get_current_user)):
+    _ensure_ca(current)
+    ca_id = str(current["_id"])
+    link = await db.client_links.find_one({"ca_id": ca_id, "vendor_id": vendor_id})
+    if not link:
+        raise HTTPException(status_code=403, detail="Not your client")
+    vendor = await db.users.find_one({"_id": ObjectId(vendor_id)})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    if not month:
+        now = datetime.now(timezone.utc)
+        month = f"{now.year}-{now.month:02d}"
+    # invoices for vendor
+    cur = db.invoices.find({"user_id": vendor_id, "invoice_date": {"$regex": f"^{re.escape(month)}"}})
+    invoices = []
+    async for d in cur:
+        d["_id"] = str(d["_id"])
+        invoices.append(d)
+    summary = compute_gst_summary(invoices, month)
+    row = await _client_status_row(ca_id, vendor, month)
+    return {"vendor": row, "gstr1": summary["gstr1"], "gstr3b": summary["gstr3b"], "invoices": invoices}
+
+
 # ---------------- Startup: indexes + seed ----------------
 @app.on_event("startup")
 async def startup():
@@ -934,6 +1145,135 @@ async def startup():
         ])
 
     print(f"[startup] HisaabBot ready. Admin={ADMIN_EMAIL}, Demo={DEMO_EMAIL}")
+
+    # Seed demo CA + linked clients
+    await db.client_links.create_index([("ca_id", 1), ("vendor_id", 1)], unique=True)
+    await db.filings.create_index([("ca_id", 1), ("vendor_id", 1), ("period", 1)], unique=True)
+
+    ca_email = "priya@hisaabbot.in"
+    ca = await db.users.find_one({"email": ca_email})
+    if not ca:
+        res = await db.users.insert_one({
+            "email": ca_email,
+            "password_hash": hash_password("ca12345"),
+            "name": "Priya Verma",
+            "role": "ca",
+            "business_name": "Verma & Associates",
+            "phone": "+919812345678",
+            "city": "Delhi",
+            "language": "en",
+            "created_at": datetime.now(timezone.utc),
+        })
+        ca_id = str(res.inserted_id)
+        now = datetime.now(timezone.utc)
+        this_month = now.strftime("%Y-%m")
+
+        # 4 sample client vendors
+        clients_data = [
+            {
+                "email": "verma_traders@hisaabbot.in",
+                "name": "Suresh Verma", "business_name": "Verma Traders",
+                "gstin": "07VERMA1234A1Z0", "city": "Delhi", "phone": "+919811111111",
+                "invoices": [
+                    {"type": "sales", "counterparty_name": "Anand Enterprises", "counterparty_gstin": "07ANAND5678B2Z1",
+                     "invoice_number": "VT-101", "invoice_date": f"{this_month}-04", "hsn_code": "8517",
+                     "taxable_amount": 80000, "cgst": 7200, "sgst": 7200, "igst": 0, "total_tax": 14400, "total_amount": 94400},
+                    {"type": "purchase", "counterparty_name": "Delhi Electronics", "counterparty_gstin": "07DELEL2233C1Z8",
+                     "invoice_number": "DE-2201", "invoice_date": f"{this_month}-02", "hsn_code": "8517",
+                     "taxable_amount": 50000, "cgst": 4500, "sgst": 4500, "igst": 0, "total_tax": 9000, "total_amount": 59000},
+                ],
+                "gstr1_status": "pending", "gstr3b_status": "pending",
+            },
+            {
+                "email": "kailash_kirana@hisaabbot.in",
+                "name": "Kailash Chand", "business_name": "Kailash Kirana Store",
+                "gstin": "08KAIL9988D1Z3", "city": "Jaipur", "phone": "+919822222222",
+                "invoices": [
+                    {"type": "sales", "counterparty_name": "Retail Cash", "counterparty_gstin": None,
+                     "invoice_number": "KK-501", "invoice_date": f"{this_month}-06", "hsn_code": "0910",
+                     "taxable_amount": 12000, "cgst": 720, "sgst": 720, "igst": 0, "total_tax": 1440, "total_amount": 13440},
+                    {"type": "sales", "counterparty_name": "Retail Cash", "counterparty_gstin": None,
+                     "invoice_number": "KK-502", "invoice_date": f"{this_month}-09", "hsn_code": "0910",
+                     "taxable_amount": 8500, "cgst": 510, "sgst": 510, "igst": 0, "total_tax": 1020, "total_amount": 9520},
+                    {"type": "purchase", "counterparty_name": "Wholesale Spices Co", "counterparty_gstin": "08WHOLE7788E1Z4",
+                     "invoice_number": "WS-990", "invoice_date": f"{this_month}-01", "hsn_code": "0910",
+                     "taxable_amount": 25000, "cgst": 1500, "sgst": 1500, "igst": 0, "total_tax": 3000, "total_amount": 28000},
+                ],
+                "gstr1_status": "draft", "gstr3b_status": "pending",
+            },
+            {
+                "email": "bharat_kapda@hisaabbot.in",
+                "name": "Anil Bharat", "business_name": "Bharat Kapda Mart",
+                "gstin": "08BHRTK4567B1Z9", "city": "Jaipur", "phone": "+919833333333",
+                "invoices": [
+                    {"type": "sales", "counterparty_name": "Fashion Hub", "counterparty_gstin": "08FASHN1122F3Z6",
+                     "invoice_number": "BK-701", "invoice_date": f"{this_month}-03", "hsn_code": "6109",
+                     "taxable_amount": 150000, "cgst": 9000, "sgst": 9000, "igst": 0, "total_tax": 18000, "total_amount": 168000},
+                    {"type": "purchase", "counterparty_name": "Sharma Textiles", "counterparty_gstin": "08AABCU9603R1ZM",
+                     "invoice_number": "ST-0119", "invoice_date": f"{this_month}-07", "hsn_code": "5208",
+                     "taxable_amount": 30000, "cgst": 1800, "sgst": 1800, "igst": 0, "total_tax": 3600, "total_amount": 33600},
+                ],
+                "gstr1_status": "pending", "gstr3b_status": "pending",
+                "urgent": True,
+            },
+            {
+                "email": "sharma_textiles_link@hisaabbot.in",  # separate link doc; actually we'll link the existing demo user too
+                "name": "Ramesh Sharma (existing)", "business_name": "Sharma Textiles",
+                "gstin": "08AABCU9603R1ZM", "city": "Jaipur", "phone": "+919876543210",
+                "invoices": [],  # already has sample invoices from demo seed
+                "link_existing": DEMO_EMAIL,
+                "gstr1_status": "filed", "gstr3b_status": "pending", "ack_number": "AB12345678",
+            },
+        ]
+
+        for cdata in clients_data:
+            existing_email = cdata.get("link_existing")
+            vendor = None
+            if existing_email:
+                vendor = await db.users.find_one({"email": existing_email})
+            if not vendor:
+                vdoc = {
+                    "email": cdata["email"],
+                    "password_hash": hash_password(uuid.uuid4().hex),
+                    "name": cdata["name"],
+                    "role": "vendor",
+                    "business_name": cdata["business_name"],
+                    "gstin": cdata["gstin"],
+                    "city": cdata["city"],
+                    "phone": cdata["phone"],
+                    "language": "hi",
+                    "client_status": "active",
+                    "created_at": now,
+                }
+                r = await db.users.insert_one(vdoc)
+                vendor_id = str(r.inserted_id)
+                # insert invoices for this vendor
+                for inv in cdata.get("invoices", []):
+                    await db.invoices.insert_one({
+                        **inv, "user_id": vendor_id, "line_items": [], "created_at": now,
+                    })
+            else:
+                vendor_id = str(vendor["_id"])
+            # link ca ↔ vendor
+            try:
+                await db.client_links.insert_one({
+                    "ca_id": ca_id, "vendor_id": vendor_id, "created_at": now,
+                })
+            except Exception:
+                pass  # unique index guard
+            # filings status
+            filing_doc = {
+                "ca_id": ca_id, "vendor_id": vendor_id, "period": this_month,
+                "gstr1_status": cdata.get("gstr1_status", "pending"),
+                "gstr3b_status": cdata.get("gstr3b_status", "pending"),
+            }
+            if cdata.get("ack_number"):
+                filing_doc["gstr1_ack"] = cdata["ack_number"]
+            await db.filings.update_one(
+                {"ca_id": ca_id, "vendor_id": vendor_id, "period": this_month},
+                {"$set": filing_doc}, upsert=True,
+            )
+        print(f"[startup] Seeded CA {ca_email} with {len(clients_data)} demo clients")
 
 
 app.include_router(api)

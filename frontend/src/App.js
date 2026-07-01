@@ -13,6 +13,7 @@ import GstReturnsPage from "./pages/GstReturnsPage";
 import UpiReconPage from "./pages/UpiReconPage";
 import VoicePage from "./pages/VoicePage";
 import SettingsPage from "./pages/SettingsPage";
+import CADashboard from "./pages/CADashboard";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="gst" element={<GstReturnsPage />} />
             <Route path="upi" element={<UpiReconPage />} />
             <Route path="voice" element={<VoicePage />} />
+            <Route path="clients" element={<CADashboard />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

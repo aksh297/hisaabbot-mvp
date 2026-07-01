@@ -17,6 +17,7 @@ export default function RegisterPage() {
     gstin: "",
     city: "",
     language: "hi",
+    role: "vendor",
   });
   const [loading, setLoading] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -51,6 +52,22 @@ export default function RegisterPage() {
           <h1 className="font-heading text-3xl font-black text-ink">Free account banaayein</h1>
           <p className="text-stone-600 mt-1">Pehla mahina bilkul free. Card ki zaroorat nahi.</p>
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
+            <div>
+              <Label>Aap kaun hain?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { v: "vendor", l: "Vendor / Trader", d: "Apna hisaab manage karein" },
+                  { v: "ca", l: "CA / Accountant", d: "Multiple clients ka bulk dashboard" },
+                ].map((o) => (
+                  <button type="button" key={o.v} onClick={() => setForm({ ...form, role: o.v })}
+                    className={`text-left p-3 rounded-lg border-2 transition ${form.role === o.v ? "border-ink bg-parchment/60" : "border-[#E7E5E4] hover:border-ochre"}`}
+                    data-testid={`signup-role-${o.v}`}>
+                    <div className="font-semibold text-ink">{o.l}</div>
+                    <div className="text-xs text-stone-500">{o.d}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <Label>Aapka naam</Label>

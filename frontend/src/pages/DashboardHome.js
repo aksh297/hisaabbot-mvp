@@ -1,20 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   TrendingUp, TrendingDown, IndianRupee, Calendar, ArrowRight, Camera, Mic, MessageCircle
 } from "lucide-react";
 import api from "../lib/api";
 import { Card, Button, Badge } from "../components/ui/primitives";
 import { fmtINR } from "../lib/utils";
+import { useAuth } from "../context/AuthContext";
 
 export default function DashboardHome() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // CA users go straight to bulk client view
   useEffect(() => {
+    if (user?.role === "ca") return;
     api.get("/dashboard/summary").then((r) => setData(r.data)).finally(() => setLoading(false));
-  }, []);
+  }, [user?.role]);
 
+  if (user?.role === "ca") return <Navigate to="/app/clients" replace/>;
   if (loading) return <div className="text-stone-500">Loading dashboard…</div>;
   if (!data) return <div className="text-terracotta">Dashboard load nahi ho paya.</div>;
 
